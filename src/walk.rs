@@ -195,11 +195,21 @@ fn probe(
     follow: bool,
 ) -> Result<bool, LupError> {
     if kind.is_none() && follow {
-        // Cheap path: just existence with symlink-following.
+        // Cheap path: just existence with symlink-following. faccessat returns
+        // 0 on success and -1 on any failure (ENOENT, EACCES, ENOTDIR, etc.);
+        // we treat all failures as "not a hit" and continue the walk. This
+        // matches typical shell semantics where an inaccessible ancestor is
+        // walked past, not an error.
         let r = unsafe { libc::faccessat(dir_fd, query.as_ptr(), libc::F_OK, 0) };
         return Ok(r == 0);
     }
-    // Need stat info or no-follow semantics.
+    // Need stat info or no-follow semantics. Note the asymmetry with the
+    // faccessat path: only ENOENT is treated as "not a hit"; other errors
+    // (EACCES, EIO, etc.) bubble up as LupError::Io. The reason is that with
+    // a type filter the caller has expressed intent ("only files" or "only
+    // dirs"), and silently skipping a permission-denied ancestor could mask
+    // the answer the user is looking for. With plain existence (above) the
+    // walk-past behavior is the principle of least surprise.
     let mut st: libc::stat = unsafe { std::mem::zeroed() };
     let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
     let r = unsafe { libc::fstatat(dir_fd, query.as_ptr(), &mut st as *mut libc::stat, flags) };
@@ -228,40 +238,34 @@ fn is_dir(mode: libc::mode_t) -> bool {
 }
 
 fn read_file_contents(dir_fd: libc::c_int, name: &CString) -> Result<Vec<u8>, LupError> {
-    let fd = unsafe { libc::openat(dir_fd, name.as_ptr(), libc::O_RDONLY) };
-    if fd < 0 {
+    let raw_fd = unsafe { libc::openat(dir_fd, name.as_ptr(), libc::O_RDONLY) };
+    if raw_fd < 0 {
         return Err(LupError::Io(std::io::Error::last_os_error()));
     }
+    let file = OwnedFd(raw_fd); // closed on drop, including panic-unwind paths
+
     let mut st: libc::stat = unsafe { std::mem::zeroed() };
-    if unsafe { libc::fstat(fd, &mut st as *mut libc::stat) } != 0 {
-        let e = std::io::Error::last_os_error();
-        unsafe {
-            libc::close(fd);
-        }
-        return Err(LupError::Io(e));
+    if unsafe { libc::fstat(file.raw(), &mut st as *mut libc::stat) } != 0 {
+        return Err(LupError::Io(std::io::Error::last_os_error()));
     }
     if (st.st_mode & libc::S_IFMT) != libc::S_IFREG {
-        unsafe {
-            libc::close(fd);
-        }
         return Err(LupError::Io(std::io::Error::from_raw_os_error(
             libc::EISDIR,
         )));
     }
+
     let size = st.st_size as usize;
     let mut buf: Vec<u8> = Vec::with_capacity(size);
     unsafe {
         let mut total: usize = 0;
         while total < size {
             let n = libc::read(
-                fd,
+                file.raw(),
                 buf.as_mut_ptr().add(total) as *mut libc::c_void,
                 size - total,
             );
             if n < 0 {
-                let e = std::io::Error::last_os_error();
-                libc::close(fd);
-                return Err(LupError::Io(e));
+                return Err(LupError::Io(std::io::Error::last_os_error()));
             }
             if n == 0 {
                 break;
@@ -269,9 +273,6 @@ fn read_file_contents(dir_fd: libc::c_int, name: &CString) -> Result<Vec<u8>, Lu
             total += n as usize;
         }
         buf.set_len(total);
-    }
-    unsafe {
-        libc::close(fd);
     }
     Ok(buf)
 }
