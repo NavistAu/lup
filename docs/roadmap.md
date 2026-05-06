@@ -19,6 +19,16 @@ re-evaluation if/when they're picked up.
 
 ## Tooling
 
+- Re-enable shellspec in CI. Currently the `shellspec` step in
+  `.github/workflows/ci.yml` is removed because shellspec hung
+  indefinitely on Ubuntu runners (60+ minutes with no progress on what
+  should be ~2 examples). The specs themselves live at
+  `bench/baselines/spec/` and are still valuable as documentation of
+  expected baseline behavior; we just don't run them in CI today. The
+  perf test invokes both bash baselines via hyperfine, so a broken
+  baseline still produces a noticeable signal (wildly wrong ratio or
+  non-zero exit), which protects against the original "broken baseline
+  silently inflates speed claims" risk.
 - `cargo-fuzz` corpus for the argv parser.
 - Build-time completion generation from CLI metadata (avoids hand-authored
   drift, but introduces a build-dep — pending evaluation).

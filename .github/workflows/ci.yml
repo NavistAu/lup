@@ -32,9 +32,9 @@ jobs:
       - name: shellcheck
         run: shellcheck bench/baselines/*.sh bench/fixtures/*.sh tools/*.sh
 
-      - name: shellspec
-        working-directory: bench/baselines
-        run: shellspec
+      # shellspec step deferred — see docs/roadmap.md.
+      # The perf test invokes both bash baselines via hyperfine, so a broken
+      # baseline still surfaces (wildly wrong ratio or non-zero exit).
 
       - name: nextest (release)
         run: cargo nextest run --release
