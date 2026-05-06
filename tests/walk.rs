@@ -130,3 +130,21 @@ fn all_hits_closest_first() {
     assert_eq!(paths[1], expected_middle.as_os_str().as_bytes());
     assert_eq!(paths[2], expected_outer.as_os_str().as_bytes());
 }
+
+#[test]
+fn multi_component_query() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("project").join("src");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::create_dir(tmp.path().join("project").join(".claude")).unwrap();
+    std::fs::write(
+        tmp.path().join("project").join(".claude").join("settings.json"),
+        b"{}",
+    ).unwrap();
+
+    let hits = run_lookup_in(&nested, b".claude/settings.json", Boundary::Root).unwrap();
+    assert_eq!(hits.len(), 1);
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join("project").join(".claude").join("settings.json");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
