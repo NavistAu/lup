@@ -1,0 +1,20 @@
+#compdef lup
+_lup() {
+    local context state line
+    _arguments \
+        '(-a --all)'{-a,--all}'[Print every hit, closest-first]' \
+        '(-e --echo)'{-e,--echo}'[Print file contents instead of paths]' \
+        '(-g --git -r --root)'{-g,--git}'[Stop at git root]' \
+        '(-r --root -g --git)'{-r,--root}'[Walk all the way to filesystem root]' \
+        '(-f --files -d --dirs)'{-f,--files}'[Only match regular files]' \
+        '(-d --dirs -f --files)'{-d,--dirs}'[Only match directories]' \
+        '(-L --follow -P --no-follow)'{-L,--follow}'[Follow symlinks]' \
+        '(-P --no-follow -L --follow)'{-P,--no-follow}'[Do not follow symlinks]' \
+        '(-0 --null)'{-0,--null}'[NUL-terminate each record]' \
+        '--relative[Print paths relative to PWD]' \
+        '--completions[Print completion script]:shell:(bash zsh fish)' \
+        '(-h --help)'{-h,--help}'[Print help]' \
+        '(-V --version)'{-V,--version}'[Print version]' \
+        '*:query:_files'
+}
+compdef _lup lup

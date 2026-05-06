@@ -1,0 +1,17 @@
+# lup bash completion
+_lup() {
+    local cur prev
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    if [[ "$prev" == "--completions" ]]; then
+        COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+        return 0
+    fi
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "-a -e -g -r -f -d -L -P -0 -h -V --all --echo --git --root --files --dirs --follow --no-follow --null --relative --completions --help --version" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -f -- "$cur") )
+}
+complete -F _lup lup

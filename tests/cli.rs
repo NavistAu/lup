@@ -64,3 +64,25 @@ fn cli_version_matches_cargo_pkg_version() {
     let s = String::from_utf8_lossy(&out.stdout);
     assert!(s.starts_with("lup "));
 }
+
+#[test]
+fn cli_completions_bash_emits_script() {
+    let out = Command::new(lup_bin())
+        .arg("--completions")
+        .arg("bash")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let s = String::from_utf8_lossy(&out.stdout);
+    assert!(s.contains("_lup"));
+}
+
+#[test]
+fn cli_completions_unknown_shell_exit_2() {
+    let out = Command::new(lup_bin())
+        .arg("--completions")
+        .arg("powershell")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}
