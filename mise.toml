@@ -1,0 +1,10 @@
+[tools]
+rust = "1.74"
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-llvm-cov" = "latest"
+hyperfine = "latest"
+shellcheck = "latest"
+shellspec = "latest"
+
+[env]
+RUST_BACKTRACE = "1"

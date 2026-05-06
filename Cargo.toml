@@ -1,0 +1,36 @@
+[package]
+name = "lup"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Walk up the directory hierarchy looking for a path."
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "lup"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lup"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+criterion = "0.5"
+serde_json = "1"
+
+[[bench]]
+name = "lookup"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+overflow-checks = false
+debug = false

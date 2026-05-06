@@ -1,0 +1,7 @@
+/target
+/Cargo.lock.bak
+/bench/history/main.jsonl
+*.lcov
+*.profdata
+*.profraw
+.DS_Store
