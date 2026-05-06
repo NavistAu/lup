@@ -48,4 +48,17 @@ mod tests {
         write_hits(&mut buf, &hits, &q, b"/a/b/c").unwrap();
         assert_eq!(buf, b"/a/b/c/.env\n/a/.env\n");
     }
+
+    #[test]
+    fn null_terminate_replaces_newline() {
+        let hits = vec![
+            Hit::Path(b"/a/.env".to_vec()),
+            Hit::Path(b"/.env".to_vec()),
+        ];
+        let mut q = Query::new(b".env");
+        q.null_terminate = true;
+        let mut buf = Vec::new();
+        write_hits(&mut buf, &hits, &q, b"/a").unwrap();
+        assert_eq!(buf, b"/a/.env\0/.env\0");
+    }
 }
