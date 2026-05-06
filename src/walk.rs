@@ -98,9 +98,14 @@ pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
     loop {
         let matched = probe(dir_fd, &query_cstr, query.kind_filter, query.follow)?;
         if matched {
-            let mut hit_path = current.clone();
-            push_component(&mut hit_path, query.path);
-            hits.push(Hit::Path(hit_path));
+            if query.echo {
+                let contents = read_file_contents(dir_fd, &query_cstr)?;
+                hits.push(Hit::Contents(contents));
+            } else {
+                let mut hit_path = current.clone();
+                push_component(&mut hit_path, query.path);
+                hits.push(Hit::Path(hit_path));
+            }
             if !query.all {
                 unsafe {
                     libc::close(dir_fd);
@@ -215,4 +220,51 @@ fn is_reg(mode: libc::mode_t) -> bool {
 
 fn is_dir(mode: libc::mode_t) -> bool {
     (mode & libc::S_IFMT) == libc::S_IFDIR
+}
+
+fn read_file_contents(dir_fd: libc::c_int, name: &CString) -> Result<Vec<u8>, LupError> {
+    let fd = unsafe { libc::openat(dir_fd, name.as_ptr(), libc::O_RDONLY) };
+    if fd < 0 {
+        return Err(LupError::Io(std::io::Error::last_os_error()));
+    }
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    if unsafe { libc::fstat(fd, &mut st as *mut libc::stat) } != 0 {
+        let e = std::io::Error::last_os_error();
+        unsafe {
+            libc::close(fd);
+        }
+        return Err(LupError::Io(e));
+    }
+    if (st.st_mode & libc::S_IFMT) != libc::S_IFREG {
+        unsafe {
+            libc::close(fd);
+        }
+        return Err(LupError::Io(std::io::Error::from_raw_os_error(libc::EISDIR)));
+    }
+    let size = st.st_size as usize;
+    let mut buf: Vec<u8> = Vec::with_capacity(size);
+    unsafe {
+        let mut total: usize = 0;
+        while total < size {
+            let n = libc::read(
+                fd,
+                buf.as_mut_ptr().add(total) as *mut libc::c_void,
+                size - total,
+            );
+            if n < 0 {
+                let e = std::io::Error::last_os_error();
+                libc::close(fd);
+                return Err(LupError::Io(e));
+            }
+            if n == 0 {
+                break;
+            }
+            total += n as usize;
+        }
+        buf.set_len(total);
+    }
+    unsafe {
+        libc::close(fd);
+    }
+    Ok(buf)
 }

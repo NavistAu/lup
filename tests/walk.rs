@@ -2,6 +2,7 @@ use lup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
 use lup::boundary::find_git_root;
 use std::os::unix::ffi::OsStrExt;
 use tempfile::TempDir;
+extern crate libc;
 
 #[test]
 fn git_root_found_when_dot_git_exists() {
@@ -283,4 +284,67 @@ fn git_boundary_errors_when_no_repo() {
     let tmp = TempDir::new().unwrap();
     let r = run_lookup_in(tmp.path(), b".env", Boundary::Git);
     assert!(matches!(r, Err(LupError::NotInGitRepo)));
+}
+
+#[test]
+fn echo_returns_file_contents() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join(".env"), b"FOO=bar\n").unwrap();
+
+    let mut q = Query::new(b".env");
+    q.echo = true;
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(tmp.path()).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0], Hit::Contents(b"FOO=bar\n".to_vec()));
+}
+
+#[test]
+fn echo_on_directory_errors() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir(tmp.path().join("target")).unwrap();
+
+    let mut q = Query::new(b"target");
+    q.echo = true;
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(tmp.path()).unwrap();
+    let r = lookup(&q, Boundary::Root);
+    std::env::set_current_dir(prev).unwrap();
+
+    match r {
+        Err(LupError::Io(e)) => {
+            assert!(
+                e.raw_os_error() == Some(libc::EISDIR)
+                    || e.kind() == std::io::ErrorKind::Other
+            );
+        }
+        other => panic!("expected Io error for dir, got {:?}", other),
+    }
+}
+
+#[test]
+fn echo_with_all_concatenates_in_walk_order() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("a").join("b");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(tmp.path().join(".env"), b"OUTER\n").unwrap();
+    std::fs::write(nested.join(".env"), b"INNER\n").unwrap();
+
+    let mut q = Query::new(b".env");
+    q.echo = true;
+    q.all = true;
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&nested).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    assert_eq!(hits.len(), 2);
+    assert_eq!(hits[0], Hit::Contents(b"INNER\n".to_vec()));
+    assert_eq!(hits[1], Hit::Contents(b"OUTER\n".to_vec()));
 }
