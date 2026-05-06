@@ -60,3 +60,41 @@ fn finds_query_at_pwd() {
     let expected_bytes: Vec<u8> = expected.as_os_str().as_bytes().to_vec();
     assert_eq!(hits[0], Hit::Path(expected_bytes));
 }
+
+#[test]
+fn finds_query_one_level_up() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("a").join("b");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(tmp.path().join("a").join(".env"), b"x=1\n").unwrap();
+
+    let hits = run_lookup_in(&nested, b".env", Boundary::Root).unwrap();
+    assert_eq!(hits.len(), 1);
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join("a").join(".env");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
+
+#[test]
+fn finds_query_at_deep_ancestor() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("a").join("b").join("c").join("d");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(tmp.path().join(".env"), b"x=1\n").unwrap();
+
+    let hits = run_lookup_in(&nested, b".env", Boundary::Root).unwrap();
+    assert_eq!(hits.len(), 1);
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join(".env");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
+
+#[test]
+fn no_match_returns_no_match_error() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("a").join("b");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let r = run_lookup_in(&nested, b".env", Boundary::Root);
+    assert!(matches!(r, Err(LupError::NoMatch)));
+}
