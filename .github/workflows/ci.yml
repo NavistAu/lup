@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mise (rust, cargo-nextest, cargo-llvm-cov, hyperfine, shellcheck, shellspec)
+        uses: jdx/mise-action@v2
+
+      - name: cargo fmt
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: shellcheck
+        run: shellcheck bench/baselines/*.sh bench/fixtures/*.sh tools/*.sh
+
+      - name: shellspec
+        working-directory: bench/baselines
+        run: shellspec
+
+      - name: nextest (release)
+        run: cargo nextest run --release
+
+      - name: coverage
+        run: |
+          cargo llvm-cov nextest --lcov --output-path coverage.lcov
+          tools/check-coverage.sh coverage.lcov
+
+      - name: perf floors (release)
+        run: cargo nextest run --release --test perf
+
+      - name: musl static build
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get install -y musl-tools
+          cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: musl smoke test
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker run --rm \
+            -v "$PWD/target/x86_64-unknown-linux-musl/release/lup:/usr/local/bin/lup:ro" \
+            -v "$PWD:/work:ro" \
+            -w /work \
+            alpine:3 \
+            sh -c "echo 'TEST=1' > /tmp/.env && cd /tmp && lup -r .env"
