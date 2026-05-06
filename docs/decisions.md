@@ -26,3 +26,4 @@ spec section reference.
 | D-019 | Fixture depth: 32 (was 8) for `tests/perf.rs` | At depth 8 process-startup dominates; at depth 32 the bash loops dominate, exposing the algorithmic ratio | §6 |
 | D-020 | Hyperfine `--shell=none` | Sub-5 ms measurements need it (hyperfine warns); avoids `/bin/sh -c` wrapping noise | §7 |
 | D-021 | Criterion in-process bench (`benches/lookup.rs`) for walk-cost-only measurement | Wall-clock can't isolate walk from startup; criterion gives microsecond-precision per iteration | §6 |
+| D-022 | `LupError::UsageError(String)` instead of spec's `UsageError(&'static str)` | Lets the parser report which flag was wrong by formatting the offending bytes (e.g. "unknown short flag: -x"); the spec's `&'static str` constraint precluded this. Public API change vs spec §4. | §4 |
