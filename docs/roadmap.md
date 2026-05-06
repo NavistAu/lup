@@ -6,9 +6,9 @@ re-evaluation if/when they're picked up.
 ## Distribution
 
 - Manpage generation (`scdoc` or hand-authored).
-- Homebrew formula.
-- GitHub Releases automation: tag-triggered workflow that publishes
-  prebuilt binaries (macOS arm64 + x86_64, Linux x86_64 glibc + musl).
+- Homebrew formula (will live at `NavistAu/homebrew-tap`).
+- Additional release targets: macOS x86_64 (Intel), Linux aarch64 (musl + glibc), Linux x86_64 glibc.
+  v0.1.0 ships macOS arm64 and Linux x86_64 musl only; the rest add CI cost and demand has not been demonstrated.
 
 ## Functionality
 
