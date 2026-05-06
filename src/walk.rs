@@ -64,6 +64,24 @@ impl From<std::io::Error> for LupError {
     }
 }
 
+struct OwnedFd(libc::c_int);
+
+impl OwnedFd {
+    fn raw(&self) -> libc::c_int {
+        self.0
+    }
+}
+
+impl Drop for OwnedFd {
+    fn drop(&mut self) {
+        if self.0 >= 0 {
+            unsafe {
+                libc::close(self.0);
+            }
+        }
+    }
+}
+
 pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
     let pwd_os = std::env::current_dir()?.into_os_string();
     let pwd_bytes = pwd_os.as_bytes().to_vec();
@@ -83,23 +101,24 @@ pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
     let mut hits: Vec<Hit> = Vec::new();
     let mut current = pwd_bytes;
 
-    let mut dir_fd = unsafe {
+    let dir_fd_raw = unsafe {
         let dot = b".\0";
         libc::openat(
             libc::AT_FDCWD,
-            dot.as_ptr().cast::<libc::c_char>(),
+            dot.as_ptr() as *const libc::c_char,
             libc::O_DIRECTORY | libc::O_RDONLY,
         )
     };
-    if dir_fd < 0 {
+    if dir_fd_raw < 0 {
         return Err(LupError::Io(std::io::Error::last_os_error()));
     }
+    let mut dir = OwnedFd(dir_fd_raw);
 
     loop {
-        let matched = probe(dir_fd, &query_cstr, query.kind_filter, query.follow)?;
+        let matched = probe(dir.raw(), &query_cstr, query.kind_filter, query.follow)?;
         if matched {
             if query.echo {
-                let contents = read_file_contents(dir_fd, &query_cstr)?;
+                let contents = read_file_contents(dir.raw(), &query_cstr)?;
                 hits.push(Hit::Contents(contents));
             } else {
                 let mut hit_path = current.clone();
@@ -107,40 +126,28 @@ pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
                 hits.push(Hit::Path(hit_path));
             }
             if !query.all {
-                unsafe {
-                    libc::close(dir_fd);
-                }
                 return Ok(hits);
             }
         }
 
         if current == boundary_bytes {
-            unsafe {
-                libc::close(dir_fd);
-            }
             break;
         }
 
-        let parent_fd = unsafe {
+        let parent_fd_raw = unsafe {
             let dotdot = b"..\0";
             libc::openat(
-                dir_fd,
-                dotdot.as_ptr().cast::<libc::c_char>(),
+                dir.raw(),
+                dotdot.as_ptr() as *const libc::c_char,
                 libc::O_DIRECTORY | libc::O_RDONLY,
             )
         };
-        unsafe {
-            libc::close(dir_fd);
-        }
-        if parent_fd < 0 {
+        if parent_fd_raw < 0 {
             return Err(LupError::Io(std::io::Error::last_os_error()));
         }
-        dir_fd = parent_fd;
+        dir = OwnedFd(parent_fd_raw); // old dir's Drop closes it
 
         if !pop_component(&mut current) {
-            unsafe {
-                libc::close(dir_fd);
-            }
             break;
         }
     }
