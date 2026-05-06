@@ -1,14 +1,7 @@
-use lup::{lookup, Boundary, LupError, Query};
+use lup::{lookup, Boundary, Hit, LupError, Query};
 use lup::boundary::find_git_root;
 use std::os::unix::ffi::OsStrExt;
 use tempfile::TempDir;
-
-#[test]
-fn stub_lookup_returns_no_match() {
-    let q = Query::new(b".env");
-    let r = lookup(&q, Boundary::Root);
-    assert!(matches!(r, Err(LupError::NoMatch)));
-}
 
 #[test]
 fn git_root_found_when_dot_git_exists() {
@@ -37,4 +30,33 @@ fn git_root_not_found_returns_none() {
     let nested = tmp.path().join("a").join("b");
     std::fs::create_dir_all(&nested).unwrap();
     assert!(find_git_root(nested.as_os_str().as_bytes()).is_none());
+}
+
+fn run_lookup_in(
+    dir: &std::path::Path,
+    query: &[u8],
+    boundary: Boundary,
+) -> Result<Vec<Hit>, LupError> {
+    // Helper: chdir + lookup. Each #[test] runs in its own process under nextest,
+    // so the global cwd mutation is safe.
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir).unwrap();
+    let r = lookup(&Query::new(query), boundary);
+    std::env::set_current_dir(prev).unwrap();
+    r
+}
+
+#[test]
+fn finds_query_at_pwd() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::write(tmp.path().join(".env"), b"x=1\n").unwrap();
+
+    let hits = run_lookup_in(tmp.path(), b".env", Boundary::Root).unwrap();
+    assert_eq!(hits.len(), 1);
+    // Canonicalize so that macOS /tmp -> /private/tmp symlinks don't cause a mismatch
+    // (current_dir() returns the resolved path, so expected must match).
+    let canonical_dir = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_dir.join(".env");
+    let expected_bytes: Vec<u8> = expected.as_os_str().as_bytes().to_vec();
+    assert_eq!(hits[0], Hit::Path(expected_bytes));
 }
