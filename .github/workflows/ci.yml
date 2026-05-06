@@ -18,6 +18,11 @@ jobs:
       - name: Install mise (rust, cargo-nextest, cargo-llvm-cov, hyperfine, shellcheck, shellspec)
         uses: jdx/mise-action@v2
 
+      - name: Install rustfmt and clippy components
+        # mise's rust backend installs rustc + cargo only; rustfmt and clippy
+        # are rustup-managed components that need an explicit add.
+        run: rustup component add rustfmt clippy
+
       - name: cargo fmt
         run: cargo fmt --check
 
