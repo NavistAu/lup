@@ -158,4 +158,9 @@ If you want to hack on `lup`, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0, at your option.
+Dual-licensed under either of:
+
+- MIT — see [`LICENSE-MIT`](LICENSE-MIT)
+- Apache 2.0 — see [`LICENSE-APACHE`](LICENSE-APACHE)
+
+at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in `lup` shall be dual-licensed as above, without any additional terms or conditions.

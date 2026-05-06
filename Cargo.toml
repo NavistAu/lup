@@ -5,6 +5,7 @@ edition = "2021"
 rust-version = "1.74"
 description = "Walk up the directory hierarchy looking for a path."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/NavistAu/lup"
 
 [lib]
 name = "lup"
