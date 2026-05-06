@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-06
 **Status:** Approved (brainstorming phase)
-**Source brief:** [`INIT.md`](../../../INIT.md)
+**Source brief:** original `INIT.md` (removed; this spec is the source of truth).
 
 ## 1. Purpose
 
@@ -390,7 +390,6 @@ lup/
 ├── Cargo.lock                   # committed (binary crate)
 ├── mise.toml                    # toolchain + dev tools
 ├── README.md
-├── INIT.md                      # original brief, kept for provenance
 ├── CLAUDE.md                    # rules summary for future Claude sessions
 ├── docs/
 │   ├── architecture.md          # short overview pointing to spec
