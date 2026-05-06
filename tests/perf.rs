@@ -46,18 +46,19 @@ fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn require_release_build() -> PathBuf {
+/// Returns the lup binary path if it's a release build, else `None`.
+/// The test skips silently (returns early) when run under non-release profiles —
+/// notably `cargo llvm-cov nextest`, which builds with instrumentation in debug
+/// mode. The actual perf measurement happens in the dedicated release step.
+fn release_lup_binary() -> Option<PathBuf> {
     let exe = env!("CARGO_BIN_EXE_lup");
     let path = PathBuf::from(exe);
     let profile = std::env::var("PROFILE").unwrap_or_default();
-    if !path.to_string_lossy().contains("/release/") && profile != "release" {
-        panic!(
-            "tests/perf.rs must be run with `cargo nextest run --release` or \
-             `cargo test --release` — got binary at {}",
-            path.display()
-        );
+    if path.to_string_lossy().contains("/release/") || profile == "release" {
+        Some(path)
+    } else {
+        None
     }
-    path
 }
 
 fn build_fixture() -> (tempfile::TempDir, PathBuf) {
@@ -97,7 +98,16 @@ fn run_hyperfine(cwd: &std::path::Path, command: &str) -> HyperfineResult {
 
 #[test]
 fn perf_floors_hold() {
-    let lup = require_release_build();
+    let lup = match release_lup_binary() {
+        Some(p) => p,
+        None => {
+            eprintln!(
+                "SKIPPED perf_floors_hold: requires --release build (use \
+                 `cargo nextest run --release --test perf`)"
+            );
+            return;
+        }
+    };
     let (_guard, deepest) = build_fixture();
 
     std::env::set_var("HOME", "/nonexistent-home-for-test");
