@@ -19,7 +19,17 @@ eval $(lup -e .env)               # eval the contents of the nearest .env
 cargo install --path .
 ```
 
-A static-musl Linux build is supported; see [`docs/architecture.md`](docs/architecture.md) and [`docs/roadmap.md`](docs/roadmap.md).
+## Building a static Linux binary
+
+```sh
+rustup target add x86_64-unknown-linux-musl
+sudo apt-get install -y musl-tools     # or your distro's equivalent
+cargo build --release --target x86_64-unknown-linux-musl
+```
+
+Output: `target/x86_64-unknown-linux-musl/release/lup` — a single-file
+binary with no shared library dependencies. macOS doesn't produce musl
+binaries directly; CI does that on Linux runners.
 
 ## Development
 
