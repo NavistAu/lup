@@ -21,9 +21,13 @@ pub fn write_hits(
                 }
                 out.write_all(&[term])?;
             }
-            Hit::Contents(_) => unreachable!(
-                "contents written by write_hits-echo path; not yet implemented"
-            ),
+            Hit::Contents(c) => {
+                out.write_all(c)?;
+                if query.null_terminate {
+                    out.write_all(&[0u8])?;
+                }
+                // No newline injection in default echo mode — see spec §3.
+            }
         }
     }
     Ok(())
@@ -139,5 +143,44 @@ mod tests {
         let mut buf = Vec::new();
         write_hits(&mut buf, &hits, &q, b"/a/b").unwrap();
         assert_eq!(buf, b"../.env\n");
+    }
+
+    #[test]
+    fn echo_writes_contents_verbatim() {
+        let hits = vec![Hit::Contents(b"FOO=bar\n".to_vec())];
+        let mut q = Query::new(b".env");
+        q.echo = true;
+        let mut buf = Vec::new();
+        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        assert_eq!(buf, b"FOO=bar\n");
+    }
+
+    #[test]
+    fn echo_with_all_concatenates_no_separator() {
+        let hits = vec![
+            Hit::Contents(b"INNER\n".to_vec()),
+            Hit::Contents(b"OUTER\n".to_vec()),
+        ];
+        let mut q = Query::new(b".env");
+        q.echo = true;
+        q.all = true;
+        let mut buf = Vec::new();
+        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        assert_eq!(buf, b"INNER\nOUTER\n");
+    }
+
+    #[test]
+    fn echo_with_all_and_null_term_separates_contents() {
+        let hits = vec![
+            Hit::Contents(b"INNER".to_vec()),
+            Hit::Contents(b"OUTER".to_vec()),
+        ];
+        let mut q = Query::new(b".env");
+        q.echo = true;
+        q.all = true;
+        q.null_terminate = true;
+        let mut buf = Vec::new();
+        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        assert_eq!(buf, b"INNER\0OUTER\0");
     }
 }
