@@ -231,3 +231,56 @@ fn no_follow_matches_symlink_itself() {
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
 }
+
+#[test]
+fn home_boundary_stops_at_home_inclusive() {
+    let tmp = TempDir::new().unwrap();
+    let fake_home = tmp.path().join("home");
+    std::fs::create_dir_all(&fake_home).unwrap();
+    let nested = fake_home.join("project");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(fake_home.join(".env"), b"home=1\n").unwrap();
+
+    let prev_home = std::env::var_os("HOME");
+    std::env::set_var("HOME", &fake_home);
+
+    let hits = run_lookup_in(&nested, b".env", Boundary::Home).unwrap();
+    assert_eq!(hits.len(), 1);
+    let canonical_home = std::fs::canonicalize(&fake_home).unwrap();
+    let expected = canonical_home.join(".env");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+
+    if let Some(h) = prev_home {
+        std::env::set_var("HOME", h);
+    }
+}
+
+#[test]
+fn home_boundary_walks_to_root_when_pwd_outside_home() {
+    let tmp = TempDir::new().unwrap();
+    let fake_home = tmp.path().join("home");
+    std::fs::create_dir_all(&fake_home).unwrap();
+    let elsewhere = tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::write(tmp.path().join(".env"), b"x=1\n").unwrap();
+
+    let prev_home = std::env::var_os("HOME");
+    std::env::set_var("HOME", &fake_home);
+
+    let hits = run_lookup_in(&elsewhere, b".env", Boundary::Home).unwrap();
+    assert!(!hits.is_empty());
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join(".env");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+
+    if let Some(h) = prev_home {
+        std::env::set_var("HOME", h);
+    }
+}
+
+#[test]
+fn git_boundary_errors_when_no_repo() {
+    let tmp = TempDir::new().unwrap();
+    let r = run_lookup_in(tmp.path(), b".env", Boundary::Git);
+    assert!(matches!(r, Err(LupError::NotInGitRepo)));
+}
