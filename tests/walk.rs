@@ -98,3 +98,35 @@ fn no_match_returns_no_match_error() {
     let r = run_lookup_in(&nested, b".env", Boundary::Root);
     assert!(matches!(r, Err(LupError::NoMatch)));
 }
+
+#[test]
+fn all_hits_closest_first() {
+    let tmp = TempDir::new().unwrap();
+    let nested = tmp.path().join("a").join("b");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(tmp.path().join(".env"), b"outer=1\n").unwrap();
+    std::fs::write(tmp.path().join("a").join(".env"), b"middle=1\n").unwrap();
+    std::fs::write(nested.join(".env"), b"inner=1\n").unwrap();
+
+    let mut q = Query::new(b".env");
+    q.all = true;
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&nested).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected_inner = canonical_tmp.join("a").join("b").join(".env");
+    let expected_middle = canonical_tmp.join("a").join(".env");
+    let expected_outer = canonical_tmp.join(".env");
+
+    assert_eq!(hits.len(), 3);
+    let paths: Vec<&[u8]> = hits.iter().map(|h| match h {
+        Hit::Path(p) => p.as_slice(),
+        _ => panic!("unexpected"),
+    }).collect();
+    assert_eq!(paths[0], expected_inner.as_os_str().as_bytes());
+    assert_eq!(paths[1], expected_middle.as_os_str().as_bytes());
+    assert_eq!(paths[2], expected_outer.as_os_str().as_bytes());
+}
