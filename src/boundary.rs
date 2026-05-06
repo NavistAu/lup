@@ -31,6 +31,32 @@ fn is_under_or_equal(child: &[u8], parent: &[u8]) -> bool {
     child.get(parent.len()) == Some(&b'/')
 }
 
+
+use std::path::PathBuf;
+
+/// Walk up from `pwd` looking for a `.git` directory or file.
+/// Returns the absolute path of the directory containing `.git`, or `None`.
+///
+/// Note: this uses `std::fs::symlink_metadata` for clarity — the git-root probe is
+/// one-time, not on the hot path, so we don't bother with raw libc here.
+pub fn find_git_root(pwd: &[u8]) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let mut current = PathBuf::from(std::ffi::OsStr::from_bytes(pwd));
+    loop {
+        let candidate = current.join(".git");
+        if std::fs::symlink_metadata(&candidate).is_ok() {
+            return Some(current.as_os_str().as_bytes().to_vec());
+        }
+        if !current.pop() {
+            return None;
+        }
+        if current.as_os_str().is_empty() {
+            return None;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
