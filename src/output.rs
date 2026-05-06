@@ -74,7 +74,9 @@ fn relativize(abs_path: &[u8], pwd: &[u8]) -> Vec<u8> {
 }
 
 fn split_components(path: &[u8]) -> Vec<&[u8]> {
-    path.split(|&b| b == b'/').filter(|s| !s.is_empty()).collect()
+    path.split(|&b| b == b'/')
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
@@ -104,10 +106,7 @@ mod tests {
 
     #[test]
     fn null_terminate_replaces_newline() {
-        let hits = vec![
-            Hit::Path(b"/a/.env".to_vec()),
-            Hit::Path(b"/.env".to_vec()),
-        ];
+        let hits = vec![Hit::Path(b"/a/.env".to_vec()), Hit::Path(b"/.env".to_vec())];
         let mut q = Query::new(b".env");
         q.null_terminate = true;
         let mut buf = Vec::new();

@@ -202,9 +202,7 @@ fn probe(
     // Need stat info or no-follow semantics.
     let mut st: libc::stat = unsafe { std::mem::zeroed() };
     let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
-    let r = unsafe {
-        libc::fstatat(dir_fd, query.as_ptr(), &mut st as *mut libc::stat, flags)
-    };
+    let r = unsafe { libc::fstatat(dir_fd, query.as_ptr(), &mut st as *mut libc::stat, flags) };
     if r != 0 {
         let err = std::io::Error::last_os_error();
         if err.raw_os_error() == Some(libc::ENOENT) {
@@ -246,7 +244,9 @@ fn read_file_contents(dir_fd: libc::c_int, name: &CString) -> Result<Vec<u8>, Lu
         unsafe {
             libc::close(fd);
         }
-        return Err(LupError::Io(std::io::Error::from_raw_os_error(libc::EISDIR)));
+        return Err(LupError::Io(std::io::Error::from_raw_os_error(
+            libc::EISDIR,
+        )));
     }
     let size = st.st_size as usize;
     let mut buf: Vec<u8> = Vec::with_capacity(size);

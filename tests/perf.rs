@@ -80,7 +80,14 @@ fn run_hyperfine(cwd: &std::path::Path, command: &str) -> HyperfineResult {
     // for sub-5ms measurements. Each command argument here is whitespace-split into
     // program + args by hyperfine itself when shell=none.
     let status = Command::new("hyperfine")
-        .args(["--shell=none", "--warmup", "5", "--runs", "21", "--export-json"])
+        .args([
+            "--shell=none",
+            "--warmup",
+            "5",
+            "--runs",
+            "21",
+            "--export-json",
+        ])
         .arg(&json_path)
         .arg(command)
         .current_dir(cwd)

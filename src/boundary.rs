@@ -31,7 +31,6 @@ fn is_under_or_equal(child: &[u8], parent: &[u8]) -> bool {
     child.get(parent.len()) == Some(&b'/')
 }
 
-
 use std::path::PathBuf;
 
 /// Walk up from `pwd` looking for a `.git` directory or file.

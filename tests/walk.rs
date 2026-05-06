@@ -1,5 +1,5 @@
-use lup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
 use lup::boundary::find_git_root;
+use lup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
 use std::os::unix::ffi::OsStrExt;
 use tempfile::TempDir;
 extern crate libc;
@@ -123,10 +123,13 @@ fn all_hits_closest_first() {
     let expected_outer = canonical_tmp.join(".env");
 
     assert_eq!(hits.len(), 3);
-    let paths: Vec<&[u8]> = hits.iter().map(|h| match h {
-        Hit::Path(p) => p.as_slice(),
-        _ => panic!("unexpected"),
-    }).collect();
+    let paths: Vec<&[u8]> = hits
+        .iter()
+        .map(|h| match h {
+            Hit::Path(p) => p.as_slice(),
+            _ => panic!("unexpected"),
+        })
+        .collect();
     assert_eq!(paths[0], expected_inner.as_os_str().as_bytes());
     assert_eq!(paths[1], expected_middle.as_os_str().as_bytes());
     assert_eq!(paths[2], expected_outer.as_os_str().as_bytes());
@@ -139,14 +142,21 @@ fn multi_component_query() {
     std::fs::create_dir_all(&nested).unwrap();
     std::fs::create_dir(tmp.path().join("project").join(".claude")).unwrap();
     std::fs::write(
-        tmp.path().join("project").join(".claude").join("settings.json"),
+        tmp.path()
+            .join("project")
+            .join(".claude")
+            .join("settings.json"),
         b"{}",
-    ).unwrap();
+    )
+    .unwrap();
 
     let hits = run_lookup_in(&nested, b".claude/settings.json", Boundary::Root).unwrap();
     assert_eq!(hits.len(), 1);
     let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
-    let expected = canonical_tmp.join("project").join(".claude").join("settings.json");
+    let expected = canonical_tmp
+        .join("project")
+        .join(".claude")
+        .join("settings.json");
     assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
 }
 
@@ -319,8 +329,7 @@ fn echo_on_directory_errors() {
     match r {
         Err(LupError::Io(e)) => {
             assert!(
-                e.raw_os_error() == Some(libc::EISDIR)
-                    || e.kind() == std::io::ErrorKind::Other
+                e.raw_os_error() == Some(libc::EISDIR) || e.kind() == std::io::ErrorKind::Other
             );
         }
         other => panic!("expected Io error for dir, got {:?}", other),

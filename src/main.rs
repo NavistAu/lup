@@ -43,10 +43,7 @@ fn main() -> ExitCode {
         }
     }
 
-    let query_bytes = parsed
-        .query
-        .as_deref()
-        .expect("validated to be present");
+    let query_bytes = parsed.query.as_deref().expect("validated to be present");
     let kind_filter = match (parsed.files_only, parsed.dirs_only) {
         (true, false) => Some(KindFilter::Files),
         (false, true) => Some(KindFilter::Dirs),
