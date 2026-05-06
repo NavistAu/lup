@@ -96,8 +96,8 @@ pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
     }
 
     loop {
-        let access = unsafe { libc::faccessat(dir_fd, query_cstr.as_ptr(), libc::F_OK, 0) };
-        if access == 0 {
+        let matched = probe(dir_fd, &query_cstr, query.kind_filter, query.follow)?;
+        if matched {
             let mut hit_path = current.clone();
             push_component(&mut hit_path, query.path);
             hits.push(Hit::Path(hit_path));
@@ -174,4 +174,45 @@ fn pop_component(dst: &mut Vec<u8>) -> bool {
     } else {
         false
     }
+}
+
+fn probe(
+    dir_fd: libc::c_int,
+    query: &CString,
+    kind: Option<KindFilter>,
+    follow: bool,
+) -> Result<bool, LupError> {
+    if kind.is_none() && follow {
+        // Cheap path: just existence with symlink-following.
+        let r = unsafe { libc::faccessat(dir_fd, query.as_ptr(), libc::F_OK, 0) };
+        return Ok(r == 0);
+    }
+    // Need stat info or no-follow semantics.
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
+    let r = unsafe {
+        libc::fstatat(dir_fd, query.as_ptr(), &mut st as *mut libc::stat, flags)
+    };
+    if r != 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ENOENT) {
+            return Ok(false);
+        }
+        return Err(LupError::Io(err));
+    }
+    let mode = st.st_mode;
+    let matched = match kind {
+        None => true,
+        Some(KindFilter::Files) => is_reg(mode),
+        Some(KindFilter::Dirs) => is_dir(mode),
+    };
+    Ok(matched)
+}
+
+fn is_reg(mode: libc::mode_t) -> bool {
+    (mode & libc::S_IFMT) == libc::S_IFREG
+}
+
+fn is_dir(mode: libc::mode_t) -> bool {
+    (mode & libc::S_IFMT) == libc::S_IFDIR
 }

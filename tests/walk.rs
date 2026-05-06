@@ -1,4 +1,4 @@
-use lup::{lookup, Boundary, Hit, LupError, Query};
+use lup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
 use lup::boundary::find_git_root;
 use std::os::unix::ffi::OsStrExt;
 use tempfile::TempDir;
@@ -146,5 +146,88 @@ fn multi_component_query() {
     assert_eq!(hits.len(), 1);
     let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
     let expected = canonical_tmp.join("project").join(".claude").join("settings.json");
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
+
+#[test]
+fn files_only_filter_skips_closer_directory() {
+    let tmp = TempDir::new().unwrap();
+    // Top-level: regular file named "target".
+    std::fs::write(tmp.path().join("target"), b"file-content").unwrap();
+    // Mid-level: directory named "target" (would be the closer hit without filter).
+    let mid = tmp.path().join("a");
+    std::fs::create_dir(&mid).unwrap();
+    std::fs::create_dir(mid.join("target")).unwrap();
+    let nested = mid.join("b");
+    std::fs::create_dir(&nested).unwrap();
+
+    let mut q = Query::new(b"target");
+    q.kind_filter = Some(KindFilter::Files);
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&nested).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join("target");
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
+
+#[test]
+fn dirs_only_filter_skips_closer_regular_file() {
+    let tmp = TempDir::new().unwrap();
+    // Top-level: directory named ".git".
+    std::fs::create_dir(tmp.path().join(".git")).unwrap();
+    // Mid-level: regular file named ".git" (would be the closer hit without filter).
+    let mid = tmp.path().join("a");
+    std::fs::create_dir(&mid).unwrap();
+    std::fs::write(mid.join(".git"), b"gitfile").unwrap();
+    let nested = mid.join("b");
+    std::fs::create_dir(&nested).unwrap();
+
+    let mut q = Query::new(b".git");
+    q.kind_filter = Some(KindFilter::Dirs);
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&nested).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join(".git");
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
+}
+
+#[test]
+fn follow_default_treats_dangling_symlink_as_missing() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    symlink("/this/path/does/not/exist", tmp.path().join(".env")).unwrap();
+
+    // Default follow=true: faccessat follows the dangling link, ENOENT -> no match.
+    let r = run_lookup_in(tmp.path(), b".env", Boundary::Root);
+    assert!(matches!(r, Err(LupError::NoMatch)));
+}
+
+#[test]
+fn no_follow_matches_symlink_itself() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    symlink("/this/path/does/not/exist", tmp.path().join(".env")).unwrap();
+
+    let mut q = Query::new(b".env");
+    q.follow = false;
+
+    let prev = std::env::current_dir().unwrap();
+    std::env::set_current_dir(tmp.path()).unwrap();
+    let hits = lookup(&q, Boundary::Root).unwrap();
+    std::env::set_current_dir(prev).unwrap();
+
+    let canonical_tmp = std::fs::canonicalize(tmp.path()).unwrap();
+    let expected = canonical_tmp.join(".env");
+    assert_eq!(hits.len(), 1);
     assert_eq!(hits[0], Hit::Path(expected.as_os_str().as_bytes().to_vec()));
 }
