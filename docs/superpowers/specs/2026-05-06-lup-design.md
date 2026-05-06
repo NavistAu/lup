@@ -283,13 +283,27 @@ binary size and cold-start overhead.
 
 ### Performance floors (enforced)
 
-| Baseline | Floor | Aspirational |
-|---|---|---|
-| Forky bash (spawns `dirname` per iteration) | `lup_median × 50 ≤ baseline_median` | 100× |
-| Pure bash (parameter expansion + `[[ -e ]]`) | `lup_median × 10 ≤ baseline_median` | 100× |
+Floors are measured at fixture depth 32 with `hyperfine --shell=none`.
+Calibrated against macOS Apple Silicon profiling (see Task 25 commit and
+`docs/perf-decisions.md`).
 
-Both floors enforced by `tests/perf.rs`. Aspirational target produces a CI
-warning when missed but does not fail the build.
+| Baseline | Hard floor (test fails below) | Aspirational (warning only) |
+|---|---|---|
+| Forky bash (spawns `dirname` per iteration) | 25× | 50× |
+| Pure bash (parameter expansion + `[[ -e ]]`) | 2× | 10× |
+
+The original aspiration of 50× / 10× was based on the algorithmic claim
+that `lup` is orders of magnitude faster than equivalent shell loops. After
+profiling, that claim is true for the algorithmic work itself (lup's walk
+is ~50µs at depth 32 vs pure-bash's ~5ms — over 100× faster on the work),
+but on **wall-clock** the comparison is dominated by process-startup floors
+(~1.9ms on macOS Rust, ~5ms for bash). The wall-clock ratio against pure
+bash is therefore capped at ~3× regardless of how fast `lup` runs.
+
+The aggressive 10× pure-bash floor is preserved as an in-process target,
+enforced by the criterion bench in `benches/lookup.rs` (Task 26). The
+hyperfine-based wall-clock test in `tests/perf.rs` uses the calibrated 2×
+floor with the original 10× as an aspirational warning.
 
 ### Profile-driven decision gate
 

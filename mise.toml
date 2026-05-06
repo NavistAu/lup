@@ -5,6 +5,8 @@ rust = "latest"
 hyperfine = "latest"
 shellcheck = "latest"
 shellspec = "latest"
+# samply: dev-host profiling tool. Install with `cargo install samply` outside mise
+# (mise's cargo backend currently fails to resolve the toolchain for it on this host).
 
 [env]
 RUST_BACKTRACE = "1"
