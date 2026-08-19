@@ -30,17 +30,15 @@ brew install navistau/tap/lup
 
 ### Pre-built binaries
 
-Download from the [latest release](https://github.com/NavistAu/lup/releases/latest) for your platform:
-
-- macOS (Apple Silicon): `lup-macos-arm64`
-- Linux (x86_64, static musl): `lup-linux-x86_64-musl`
-
-Make it executable and put it on your `$PATH`:
+Download a `.tar.gz` for your platform from the [latest release](https://github.com/NavistAu/lup/releases/latest), verify it against the accompanying `.sha256`, then extract and install:
 
 ```sh
-chmod +x lup-*
-sudo mv lup-* /usr/local/bin/lup
+tar xzf lup-vX.Y.Z-<target>.tar.gz
+chmod +x lup
+sudo mv lup /usr/local/bin/lup
 ```
+
+Targets: `aarch64-apple-darwin` (macOS, Apple Silicon), `x86_64-unknown-linux-musl` (Linux, static).
 
 ### From source
 

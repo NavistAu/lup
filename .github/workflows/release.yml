@@ -1,95 +1,175 @@
-name: release
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag to release (e.g. v0.1.0)'
-        required: true
+      force:
+        description: "Release even if Cargo.toml's version is already tagged"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
+  # Every push to `main` is a release: `main` only advances via the develop->main
+  # release PR (the gate). This workflow reads the version from Cargo.toml and
+  # releases it unless that tag already exists. There is no tag-push trigger, so
+  # no PAT / App token is needed — the provenance tag `vX.Y.Z` is created inside
+  # the run by the `release` job using the default GITHUB_TOKEN (nothing is
+  # *triggered* by it, so the token's recursion suppression does not matter).
+  # Manual re-release: run via workflow_dispatch with `force: true`.
+  gate:
+    name: Release gate
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decide whether to release
+        id: decide
+        run: |
+          VERSION=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+            echo "Forced release of ${TAG}."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing ${TAG}."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
-    name: build ${{ matrix.target }}
+    name: Build ${{ matrix.target }}
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
             os: macos-latest
-            artifact: lup-macos-arm64
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            artifact: lup-linux-x86_64-musl
-    runs-on: ${{ matrix.os }}
+            musl: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install musl tools
+        if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install musl-tools (Linux only)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} --bin lup
 
-      - name: Stage artifact
+      - name: Package
         run: |
-          mkdir -p dist
-          cp "target/${{ matrix.target }}/release/lup" "dist/${{ matrix.artifact }}"
-          chmod +x "dist/${{ matrix.artifact }}"
-          (cd dist && shasum -a 256 "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256")
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../lup-${{ needs.gate.outputs.tag }}-${{ matrix.target }}.tar.gz lup
+          cd ../../..
+          shasum -a 256 lup-${{ needs.gate.outputs.tag }}-${{ matrix.target }}.tar.gz > lup-${{ needs.gate.outputs.tag }}-${{ matrix.target }}.tar.gz.sha256
 
-      - name: Upload to workflow artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: lup-${{ matrix.target }}
           path: |
-            dist/${{ matrix.artifact }}
-            dist/${{ matrix.artifact }}.sha256
+            lup-*.tar.gz
+            lup-*.tar.gz.sha256
           if-no-files-found: error
 
-  publish:
-    name: publish release
-    needs: build
+  release:
+    name: Create Release
+    needs: [gate, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Triggered on push to main (not a tag), so name the tag explicitly;
+          # the action creates `vX.Y.Z` on this commit with GITHUB_TOKEN.
+          tag_name: ${{ needs.gate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            lup-*.tar.gz
+            lup-*.tar.gz.sha256
 
-      - name: Download all artifacts
+  tap-update:
+    name: Update Homebrew tap
+    needs: [gate, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: NavistAu/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          pattern: lup-*
           merge-multiple: true
+          path: artifacts
 
-      - name: Determine tag
-        id: tag
+      - name: Generate formula
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
+          VERSION="${{ needs.gate.outputs.version }}"
+          TAG="${{ needs.gate.outputs.tag }}"
+          ARM_SHA=$(cut -d' ' -f1 "artifacts/lup-${TAG}-aarch64-apple-darwin.tar.gz.sha256")
+          LINUX_SHA=$(cut -d' ' -f1 "artifacts/lup-${TAG}-x86_64-unknown-linux-musl.tar.gz.sha256")
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cat > homebrew-tap/Formula/lup.rb << FORMULA
+          class Lup < Formula
+            desc "Walk up the directory hierarchy looking for a file"
+            homepage "https://github.com/NavistAu/lup"
+            version "${VERSION}"
+            license "MIT OR Apache-2.0"
+
+            if OS.mac?
+              url "https://github.com/NavistAu/lup/releases/download/${TAG}/lup-${TAG}-aarch64-apple-darwin.tar.gz"
+              sha256 "${ARM_SHA}"
+            else
+              url "https://github.com/NavistAu/lup/releases/download/${TAG}/lup-${TAG}-x86_64-unknown-linux-musl.tar.gz"
+              sha256 "${LINUX_SHA}"
+            end
+
+            def install
+              bin.install "lup"
+            end
+
+            test do
+              assert_match "lup", shell_output("#{bin}/lup --version")
+            end
+          end
+          FORMULA
+
+      - name: Push formula
         run: |
-          gh release create "${{ steps.tag.outputs.tag }}" \
-            --title "${{ steps.tag.outputs.tag }}" \
-            --generate-notes \
-            dist/lup-macos-arm64 \
-            dist/lup-macos-arm64.sha256 \
-            dist/lup-linux-x86_64-musl \
-            dist/lup-linux-x86_64-musl.sha256
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/lup.rb
+          git commit -m "lup ${{ needs.gate.outputs.tag }}"
+          git push
