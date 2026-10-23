@@ -5,10 +5,14 @@ literal query path exists. The walk uses an open file descriptor (`openat`)
 plus relative-path probes (`faccessat` / `fstatat`), avoiding repeated
 path-string concatenation kernel-side.
 
+The library's `lookup()` takes the start directory and the home directory as
+arguments; only `main` reads `$PWD` and `$HOME` from the process. A caller can
+walk from any directory without `chdir`.
+
 The hot path:
 
 ```
-dir_fd = openat(AT_FDCWD, ".", O_DIRECTORY)
+dir_fd = openat(AT_FDCWD, start, O_DIRECTORY)
 loop:
     matched? = faccessat(dir_fd, query, F_OK)   # or fstatat for type filtering
     if matched: emit / record
