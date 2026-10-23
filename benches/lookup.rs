@@ -6,6 +6,8 @@
 //!
 //! Run with `cargo bench`. Results land in `target/criterion/`.
 
+use std::os::unix::ffi::OsStrExt;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use lup::walk::{lookup, Boundary, Query};
 
@@ -20,22 +22,20 @@ fn bench_walk(c: &mut Criterion) {
         deep = deep.join(format!("d{}", i));
     }
     std::fs::create_dir_all(&deep).unwrap();
-
-    // Pin HOME outside the fixture so the default boundary doesn't short-circuit.
-    std::env::set_var("HOME", "/nonexistent-home-for-bench");
-    std::env::set_current_dir(&deep).unwrap();
+    let start = std::fs::canonicalize(&deep).unwrap();
+    let start = start.as_os_str().as_bytes();
 
     let mut group = c.benchmark_group("walk");
     group.bench_function("depth32_hit_at_root", |b| {
         b.iter(|| {
             let q = Query::new(b".env");
-            black_box(lookup(&q, Boundary::Root)).unwrap();
+            black_box(lookup(&q, start, Boundary::Root)).unwrap();
         });
     });
     group.bench_function("depth32_no_match", |b| {
         b.iter(|| {
             let q = Query::new(b".no_such_file_here");
-            let _ = black_box(lookup(&q, Boundary::Root));
+            let _ = black_box(lookup(&q, start, Boundary::Root));
         });
     });
     group.finish();

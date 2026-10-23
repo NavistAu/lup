@@ -1,8 +1,6 @@
 //! Walk algorithm and core types.
 
 use std::ffi::CString;
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::ffi::OsStringExt;
 
 use crate::boundary;
 
@@ -37,9 +35,13 @@ pub enum KindFilter {
     Dirs,
 }
 
+/// Where the walk stops. The boundary directory itself is probed.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Boundary {
-    Home,
+pub enum Boundary<'a> {
+    /// At this home directory when the start is it or under it, else at `/`.
+    /// With no home, at `/`.
+    Home(Option<&'a [u8]>),
+    /// At the nearest ancestor of the start holding `.git`.
     Git,
     Root,
 }
@@ -82,30 +84,34 @@ impl Drop for OwnedFd {
     }
 }
 
-pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
-    let pwd_os = std::env::current_dir()?.into_os_string();
-    let pwd_bytes = pwd_os.as_bytes().to_vec();
-
-    let home_bytes = home_dir_bytes();
+/// Walks up from `start` to `boundary`, probing each directory for `query.path`.
+///
+/// `start` must be absolute and physical, as `getcwd(3)` returns it: the walk
+/// follows `..` on disk but names hits from `start`, so a path through a
+/// symlink would name hits after directories that were never probed.
+pub fn lookup(query: &Query, start: &[u8], boundary: Boundary) -> Result<Vec<Hit>, LupError> {
+    if !start.starts_with(b"/") {
+        return Err(LupError::UsageError(
+            "start must be an absolute path".into(),
+        ));
+    }
     let boundary_bytes: Vec<u8> = match boundary {
-        Boundary::Home => match home_bytes.as_deref() {
-            Some(h) => boundary::resolve_default(&pwd_bytes, h).to_vec(),
-            None => b"/".to_vec(),
-        },
-        Boundary::Root => b"/".to_vec(),
-        Boundary::Git => boundary::find_git_root(&pwd_bytes).ok_or(LupError::NotInGitRepo)?,
+        Boundary::Home(Some(home)) => boundary::resolve_default(start, home).to_vec(),
+        Boundary::Home(None) | Boundary::Root => b"/".to_vec(),
+        Boundary::Git => boundary::find_git_root(start).ok_or(LupError::NotInGitRepo)?,
     };
 
     let query_cstr = CString::new(query.path)
         .map_err(|_| LupError::UsageError("query contains NUL byte".into()))?;
+    let start_cstr =
+        CString::new(start).map_err(|_| LupError::UsageError("start contains NUL byte".into()))?;
     let mut hits: Vec<Hit> = Vec::new();
-    let mut current = pwd_bytes;
+    let mut current = start.to_vec();
 
     let dir_fd_raw = unsafe {
-        let dot = b".\0";
         libc::openat(
             libc::AT_FDCWD,
-            dot.as_ptr() as *const libc::c_char,
+            start_cstr.as_ptr(),
             libc::O_DIRECTORY | libc::O_RDONLY,
         )
     };
@@ -157,10 +163,6 @@ pub fn lookup(query: &Query, boundary: Boundary) -> Result<Vec<Hit>, LupError> {
     } else {
         Ok(hits)
     }
-}
-
-fn home_dir_bytes() -> Option<Vec<u8>> {
-    std::env::var_os("HOME").map(|s| s.into_vec())
 }
 
 /// `dst = dst + "/" + component`, with leading-slash dedup so we don't produce `//x`.

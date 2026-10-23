@@ -57,19 +57,24 @@ fn main() -> ExitCode {
     q.null_terminate = parsed.null_terminate;
     q.relative = parsed.relative;
 
+    let pwd = match std::env::current_dir() {
+        Ok(p) => p.into_os_string().into_vec(),
+        Err(e) => {
+            eprintln!("lup: I/O error: {}", e);
+            return ExitCode::from(4);
+        }
+    };
+    let home = std::env::var_os("HOME").map(OsString::into_vec);
+
     let boundary = if parsed.git {
         Boundary::Git
     } else if parsed.root {
         Boundary::Root
     } else {
-        Boundary::Home
+        Boundary::Home(home.as_deref())
     };
 
-    let pwd = std::env::current_dir()
-        .map(|p| p.into_os_string().into_vec())
-        .unwrap_or_default();
-
-    match lookup(&q, boundary) {
+    match lookup(&q, &pwd, boundary) {
         Ok(hits) => {
             let stdout = std::io::stdout();
             let mut h = stdout.lock();
