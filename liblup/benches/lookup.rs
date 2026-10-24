@@ -1,4 +1,4 @@
-//! In-process benchmarks for `lup::walk::lookup`.
+//! In-process benchmarks for `liblup::walk::lookup`.
 //!
 //! These measure the walk loop cost without process-spawn / dyld / Rust-runtime
 //! overhead — i.e., the "algorithmic" part of lup. Compare to the wall-clock
@@ -9,7 +9,7 @@
 use std::os::unix::ffi::OsStrExt;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use lup::walk::{lookup, Boundary, Query};
+use liblup::walk::{lookup, Boundary, Query};
 
 const DEPTH: usize = 32;
 

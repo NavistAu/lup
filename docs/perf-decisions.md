@@ -27,8 +27,8 @@ achievable on wall-clock at depth 8.
 - `target/release/examples/noop` (`fn main() {}`) — pure startup baseline
 - `target/release/lup --version` — adds argv parse + static print
 - `target/release/lup -r .env` (depth 32) — full work
-- `bash bench/baselines/forky.sh .env` (depth 32) — process-spawning bash
-- `bash bench/baselines/pure.sh .env` (depth 32) — parameter-expansion bash
+- `bash lup-cli/bench/baselines/forky.sh .env` (depth 32) — process-spawning bash
+- `bash lup-cli/bench/baselines/pure.sh .env` (depth 32) — parameter-expansion bash
 
 Cross-checked with `otool -L` (dylib imports) and the rust-random/rand#733
 issue thread re: macOS dyld initialization cost.
@@ -50,6 +50,6 @@ lup runs.
 
 **Decision:** kept. Floors recalibrated to 25× forky / 2× pure (hard);
 50× / 10× kept as aspirational warnings. Algorithmic 10× pure-bash claim
-moved to in-process measurement via `benches/lookup.rs` (criterion).
+moved to in-process measurement via `liblup/benches/lookup.rs` (criterion).
 
 **See also:** spec §6 (calibrated table), `docs/decisions.md` D-018 / D-019 / D-020 / D-021.

@@ -11,8 +11,6 @@ pub struct Query<'a> {
     pub echo: bool,
     pub kind_filter: Option<KindFilter>,
     pub follow: bool,
-    pub null_terminate: bool,
-    pub relative: bool,
 }
 
 impl<'a> Query<'a> {
@@ -23,8 +21,6 @@ impl<'a> Query<'a> {
             echo: false,
             kind_filter: None,
             follow: true,
-            null_terminate: false,
-            relative: false,
         }
     }
 }

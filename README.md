@@ -40,15 +40,33 @@ sudo mv lup /usr/local/bin/lup
 
 Targets: `aarch64-apple-darwin` (macOS, Apple Silicon), `x86_64-unknown-linux-musl` (Linux, static).
 
-### From source
+### From crates.io
 
-Requires Rust 1.74 or newer:
+Requires Rust 1.74 or newer. The command is the `lup-cli` crate:
 
 ```sh
-cargo install --git https://github.com/NavistAu/lup
+cargo install lup-cli
 ```
 
-Or clone and `cargo install --path .`.
+Or from a clone: `cargo install --path lup-cli`.
+
+### As a library
+
+The walk is the `liblup` crate. `lookup` takes the start directory, so it walks from any directory without `chdir`:
+
+```toml
+[dependencies]
+liblup = "0.3"
+```
+
+```rust
+use liblup::{lookup, Boundary, Hit, Query};
+
+let hits = lookup(&Query::new(b".env"), b"/work/app/src", Boundary::Home(Some(b"/work")))?;
+if let Some(Hit::Path(path)) = hits.first() {
+    println!("{}", String::from_utf8_lossy(path));
+}
+```
 
 ## Usage
 

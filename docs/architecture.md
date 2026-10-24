@@ -29,14 +29,18 @@ strategy) lives in
 
 ## Module layout
 
-| Module | Responsibility |
-|---|---|
-| `walk` | The search loop, type definitions (`Query`, `Boundary`, `Hit`, `KindFilter`, `LupError`), `OwnedFd` RAII guard, content read for `-e` |
-| `boundary` | Default HOME-or-/ resolution; git-root probe |
-| `output` | Stdout writers: paths, contents, NUL-termination, relative paths |
-| `cli` | Hand-rolled argv parser, `ParsedArgs`, mutex validation, `HELP` and `VERSION` constants |
-| `completions` | Hand-authored bash/zsh/fish completion scripts (static `&'static str` via `include_str!`) |
-| `main` | argv → cli::parse → walk::lookup → output::write_hits → ExitCode |
+Two crates in one workspace. `liblup` is the walk, the library other programs
+depend on. `lup-cli` is the `lup` command; its modules are private to the
+binary.
+
+| Crate | Module | Responsibility |
+|---|---|---|
+| `liblup` | `walk` | The search loop, type definitions (`Query`, `Boundary`, `Hit`, `KindFilter`, `LupError`), `OwnedFd` RAII guard, content read for `-e` |
+| `liblup` | `boundary` | Default HOME-or-/ resolution; git-root probe |
+| `lup-cli` | `output` | Stdout writers: paths, contents, NUL-termination, relative paths (`Format`) |
+| `lup-cli` | `cli` | Hand-rolled argv parser, `ParsedArgs`, mutex validation, `HELP` and `VERSION` constants |
+| `lup-cli` | `completions` | Hand-authored bash/zsh/fish completion scripts (static `&'static str` via `include_str!`) |
+| `lup-cli` | `main` | argv → cli::parse → liblup::lookup → output::write_hits → ExitCode |
 
 ## Performance characteristics
 

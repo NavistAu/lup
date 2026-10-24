@@ -1,7 +1,8 @@
 /target
 /Cargo.lock.bak
-/bench/history/main.jsonl
+/lup-cli/bench/history/main.jsonl
 *.lcov
 *.profdata
 *.profraw
 .DS_Store
+/.worktrees/

@@ -1,5 +1,5 @@
-use lup::boundary::find_git_root;
-use lup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
+use liblup::boundary::find_git_root;
+use liblup::{lookup, Boundary, Hit, KindFilter, LupError, Query};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;

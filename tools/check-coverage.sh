@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Read coverage.lcov and assert: lib lines ≥ 90%, whole binary lines ≥ 85%.
-# Lib lines = any source file under src/ excluding src/main.rs.
+# Lib lines = any source file of the liblup crate (liblup/src/).
 set -euo pipefail
 
 LCOV="${1:-coverage.lcov}"
@@ -16,7 +16,7 @@ awk '
     /^LH:/   { lh=substr($0,4) }
     /^end_of_record$/ {
         total_lf += lf; total_lh += lh
-        if (file !~ /src\/main\.rs$/ && file ~ /src\//) {
+        if (file ~ /liblup\/src\//) {
             lib_lf += lf; lib_lh += lh
         }
     }
