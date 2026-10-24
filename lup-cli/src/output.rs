@@ -1,19 +1,28 @@
 //! Stdout writers.
 
-use crate::walk::{Hit, Query};
+use liblup::Hit;
 use std::io::Write;
+
+/// How hits are printed.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Format {
+    /// End each hit with NUL instead of a newline.
+    pub null_terminate: bool,
+    /// Print paths relative to PWD.
+    pub relative: bool,
+}
 
 pub fn write_hits(
     out: &mut impl Write,
     hits: &[Hit],
-    query: &Query,
+    format: Format,
     pwd: &[u8],
 ) -> std::io::Result<()> {
-    let term: u8 = if query.null_terminate { 0 } else { b'\n' };
+    let term: u8 = if format.null_terminate { 0 } else { b'\n' };
     for hit in hits {
         match hit {
             Hit::Path(p) => {
-                if query.relative {
+                if format.relative {
                     let rel = relativize(p, pwd);
                     out.write_all(&rel)?;
                 } else {
@@ -23,7 +32,7 @@ pub fn write_hits(
             }
             Hit::Contents(c) => {
                 out.write_all(c)?;
-                if query.null_terminate {
+                if format.null_terminate {
                     out.write_all(&[0u8])?;
                 }
                 // No newline injection in default echo mode — see spec §3.
@@ -86,9 +95,9 @@ mod tests {
     #[test]
     fn default_mode_writes_newline_terminated_paths() {
         let hits = vec![Hit::Path(b"/a/b/.env".to_vec())];
-        let q = Query::new(b".env");
+        let f = Format::default();
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a/b/c").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a/b/c").unwrap();
         assert_eq!(buf, b"/a/b/.env\n");
     }
 
@@ -98,59 +107,66 @@ mod tests {
             Hit::Path(b"/a/b/c/.env".to_vec()),
             Hit::Path(b"/a/.env".to_vec()),
         ];
-        let q = Query::new(b".env");
+        let f = Format::default();
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a/b/c").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a/b/c").unwrap();
         assert_eq!(buf, b"/a/b/c/.env\n/a/.env\n");
     }
 
     #[test]
     fn null_terminate_replaces_newline() {
         let hits = vec![Hit::Path(b"/a/.env".to_vec()), Hit::Path(b"/.env".to_vec())];
-        let mut q = Query::new(b".env");
-        q.null_terminate = true;
+        let f = Format {
+            null_terminate: true,
+            ..Format::default()
+        };
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a").unwrap();
         assert_eq!(buf, b"/a/.env\0/.env\0");
     }
 
     #[test]
     fn relative_mode_for_path_in_pwd() {
         let hits = vec![Hit::Path(b"/a/b/c/.env".to_vec())];
-        let mut q = Query::new(b".env");
-        q.relative = true;
+        let f = Format {
+            relative: true,
+            ..Format::default()
+        };
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a/b/c").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a/b/c").unwrap();
         assert_eq!(buf, b".env\n");
     }
 
     #[test]
     fn relative_mode_for_ancestor() {
         let hits = vec![Hit::Path(b"/a/.env".to_vec())];
-        let mut q = Query::new(b".env");
-        q.relative = true;
+        let f = Format {
+            relative: true,
+            ..Format::default()
+        };
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a/b/c").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a/b/c").unwrap();
         assert_eq!(buf, b"../../.env\n");
     }
 
     #[test]
     fn relative_mode_for_two_levels_up() {
         let hits = vec![Hit::Path(b"/a/.env".to_vec())];
-        let mut q = Query::new(b".env");
-        q.relative = true;
+        let f = Format {
+            relative: true,
+            ..Format::default()
+        };
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/a/b").unwrap();
+        write_hits(&mut buf, &hits, f, b"/a/b").unwrap();
         assert_eq!(buf, b"../.env\n");
     }
 
     #[test]
     fn echo_writes_contents_verbatim() {
         let hits = vec![Hit::Contents(b"FOO=bar\n".to_vec())];
-        let mut q = Query::new(b".env");
-        q.echo = true;
+        let f = Format::default();
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        write_hits(&mut buf, &hits, f, b"/").unwrap();
         assert_eq!(buf, b"FOO=bar\n");
     }
 
@@ -160,11 +176,9 @@ mod tests {
             Hit::Contents(b"INNER\n".to_vec()),
             Hit::Contents(b"OUTER\n".to_vec()),
         ];
-        let mut q = Query::new(b".env");
-        q.echo = true;
-        q.all = true;
+        let f = Format::default();
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        write_hits(&mut buf, &hits, f, b"/").unwrap();
         assert_eq!(buf, b"INNER\nOUTER\n");
     }
 
@@ -174,12 +188,12 @@ mod tests {
             Hit::Contents(b"INNER".to_vec()),
             Hit::Contents(b"OUTER".to_vec()),
         ];
-        let mut q = Query::new(b".env");
-        q.echo = true;
-        q.all = true;
-        q.null_terminate = true;
+        let f = Format {
+            null_terminate: true,
+            ..Format::default()
+        };
         let mut buf = Vec::new();
-        write_hits(&mut buf, &hits, &q, b"/").unwrap();
+        write_hits(&mut buf, &hits, f, b"/").unwrap();
         assert_eq!(buf, b"INNER\0OUTER\0");
     }
 }

@@ -30,7 +30,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: shellcheck
-        run: shellcheck bench/baselines/*.sh bench/fixtures/*.sh tools/*.sh
+        run: shellcheck lup-cli/bench/baselines/*.sh lup-cli/bench/fixtures/*.sh tools/*.sh
 
       # shellspec step deferred — see docs/roadmap.md.
       # The perf test invokes both bash baselines via hyperfine, so a broken

@@ -3,10 +3,13 @@ use std::io::Write;
 use std::os::unix::ffi::OsStringExt;
 use std::process::ExitCode;
 
-use lup::cli::{self, HELP, VERSION};
-use lup::completions;
-use lup::output;
-use lup::walk::{lookup, Boundary, KindFilter, LupError, Query};
+use liblup::{lookup, Boundary, KindFilter, LupError, Query};
+
+mod cli;
+mod completions;
+mod output;
+
+use cli::{HELP, VERSION};
 
 fn main() -> ExitCode {
     let argv: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -54,8 +57,10 @@ fn main() -> ExitCode {
     q.echo = parsed.echo;
     q.kind_filter = kind_filter;
     q.follow = parsed.effective_follow();
-    q.null_terminate = parsed.null_terminate;
-    q.relative = parsed.relative;
+    let format = output::Format {
+        null_terminate: parsed.null_terminate,
+        relative: parsed.relative,
+    };
 
     let pwd = match std::env::current_dir() {
         Ok(p) => p.into_os_string().into_vec(),
@@ -78,7 +83,7 @@ fn main() -> ExitCode {
         Ok(hits) => {
             let stdout = std::io::stdout();
             let mut h = stdout.lock();
-            if let Err(e) = output::write_hits(&mut h, &hits, &q, &pwd) {
+            if let Err(e) = output::write_hits(&mut h, &hits, format, &pwd) {
                 eprintln!("lup: write error: {}", e);
                 return ExitCode::from(4);
             }

@@ -18,7 +18,7 @@ cargo nextest run --release --test perf    # hyperfine-driven perf floors (relea
 cargo bench --bench lookup                 # criterion in-process bench
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
-shellcheck bench/baselines/*.sh bench/fixtures/*.sh tools/*.sh
+shellcheck lup-cli/bench/baselines/*.sh lup-cli/bench/fixtures/*.sh tools/*.sh
 ```
 
 Coverage:
@@ -61,7 +61,7 @@ Aspirational targets (logged as warnings, do not fail the build):
 
 - 50× forky-bash, 10× pure-bash
 
-The wall-clock 10× pure-bash claim is achievable only in-process and is exercised by `benches/lookup.rs` (criterion). See [`docs/perf-decisions.md`](docs/perf-decisions.md) for the full derivation.
+The wall-clock 10× pure-bash claim is achievable only in-process and is exercised by `liblup/benches/lookup.rs` (criterion). See [`docs/perf-decisions.md`](docs/perf-decisions.md) for the full derivation.
 
 **Do not merge a regression below the hard floors.**
 

@@ -23,7 +23,7 @@ re-evaluation if/when they're picked up.
   `.github/workflows/ci.yml` is removed because shellspec hung
   indefinitely on Ubuntu runners (60+ minutes with no progress on what
   should be ~2 examples). The specs themselves live at
-  `bench/baselines/spec/` and are still valuable as documentation of
+  `lup-cli/bench/baselines/spec/` and are still valuable as documentation of
   expected baseline behavior; we just don't run them in CI today. The
   perf test invokes both bash baselines via hyperfine, so a broken
   baseline still produces a noticeable signal (wildly wrong ratio or
@@ -34,7 +34,7 @@ re-evaluation if/when they're picked up.
   drift, but introduces a build-dep — pending evaluation).
 - Performance regression warning vs previous CI run. The spec (§9) calls
   for warning in the CI summary when either ratio regresses >20% vs the most
-  recent `bench/history/main.jsonl` row. The floor assertions still catch
+  recent `lup-cli/bench/history/main.jsonl` row. The floor assertions still catch
   catastrophic regressions; the warning is a finer-grained signal. Implementing
   it requires CI artifact-persistence (cache-action or branch-commit) plus a
   comparison script.
