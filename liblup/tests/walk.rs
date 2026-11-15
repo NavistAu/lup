@@ -317,3 +317,29 @@ fn echo_with_all_concatenates_in_walk_order() {
         ]
     );
 }
+
+/// With a type filter the caller said what they want, so a directory that
+/// cannot be searched is an error, not a silent "no hit": skipping it could
+/// hide the very file the caller is after.
+#[test]
+fn type_filter_in_an_unsearchable_directory_is_an_io_error() {
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        return; // root ignores directory permissions
+    }
+    let (_tmp, root) = physical_tempdir();
+    let locked = root.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    // readable (so it can be opened) but not searchable (so it cannot be probed)
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+    let mut q = Query::new(b".env");
+    q.kind_filter = Some(KindFilter::Files);
+    let got = lookup(&q, bytes(&locked), Boundary::Root);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    match got {
+        Err(LupError::Io(e)) => assert_eq!(e.raw_os_error(), Some(libc::EACCES)),
+        other => panic!("expected an EACCES io error, got {other:?}"),
+    }
+}
